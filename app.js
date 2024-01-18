@@ -82,11 +82,14 @@ class App extends cutil.mixin(AppBase, dumper) {
 		let app = this;
 		await app.toDefineInitOptionsDumper();
 		app.commander.option("-n, --network <network>", "network (mainnet/stagenet)");
-		app.commander.option("--set-network <network>", "set network permanently (mainnet/stagenet)");
+		app.commander.option("--set-network <network>", "set network persistently (mainnet/stagenet)");
 		app.commander.option("-k, --key <key>", "pass key");
-		app.commander.option("--set-key <key>", "set pass key permanently");
+		app.commander.option("--set-key <key>", "set pass key persistently");
 		app.commander.option("-p, --phrase <phrase>", "mnemonic phrase");
 		app.commander.option("-f, --fetch", "use custom fetch");
+		app.commander.option("--set-fetch", "use custom fetch persistently");
+		app.commander.option("--no-fetch", "don't use custom fetch");
+		app.commander.option("--no-set-fetch", "don't use custom fetch persistently");
 		app.commander.command("run");
 		app.commander.command("send")
 			.description("send funds to another address")
@@ -125,9 +128,6 @@ class App extends cutil.mixin(AppBase, dumper) {
 		let app = this;
 		await app.toApplyInitOptionsDumper();
 		
-		axios.interceptors.request.use(config => ({...config, fetch}));
-		cosmosclient.config.globalAxios.interceptors.request.use(config => ({...config, fetch}));
-		
 		register9Rheader(cosmosclient.config.globalAxios)
 		register9Rheader(axios);
 		
@@ -148,6 +148,24 @@ class App extends cutil.mixin(AppBase, dumper) {
 		}
 		if (cutil.a(opts.phrase)) {
 			app.phrase = opts.phrase;
+		}
+		if (cutil.a(opts.setFetch)) {
+			app.useCustomeFetch = null;
+			app.prefs.useCustomeFetch = opts.setFetch;
+		}
+		if (cutil.a(opts.fetch)) {
+			app.useCustomeFetch = opts.fetch;
+		}
+		if (cutil.a(opts.noSetFetch)) {
+			app.useCustomeFetch = null;
+			app.prefs.useCustomeFetch = !opts.noSetFetch;
+		}
+		if (cutil.a(opts.noFetch)) {
+			app.useCustomeFetch = !opts.noFetch;
+		}
+		if (app.useCustomeFetch) {
+			axios.interceptors.request.use(config => ({...config, fetch}));
+			cosmosclient.config.globalAxios.interceptors.request.use(config => ({...config, fetch}));
 		}
 	}
 	async toSend({asset, amount, decimals = "8", toAddress, memo}) {
