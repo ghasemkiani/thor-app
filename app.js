@@ -1,5 +1,4 @@
 import dateformat from "dateformat";
-import {SysPass} from "@ghasemkiani/pass";
 
 import cosmosclientcore from "@cosmos-client/core";
 const { default: cosmosclient } = cosmosclientcore;
@@ -19,22 +18,27 @@ import {Wallet} from "@xchainjs/xchain-thorchain-amm";
 import axios from "axios";
 
 import {cutil} from "@ghasemkiani/base";
+import {fetch} from "@ghasemkiani/fetch";
 import {App as AppBase} from "@ghasemkiani/base-app";
+import {dumper} from "@ghasemkiani/base-app";
+import {SysPass} from "@ghasemkiani/pass";
 
 const df = date => dateformat(date, "yyyy-mm-dd HH:MM:ss");
 const pass = await SysPass.toGetPass();
 
-class App extends AppBase {
+class App extends cutil.mixin(AppBase, dumper) {
 	static {
 		cutil.extend(this.prototype, {
 			prefsId: "gkthor",
 			defaultPrefs: {
 				network: "mainnet",
 				passkey: null,
+				useCustomeFetch: false,
 			},
 			_network: null,
 			_passkey: null,
 			_phrase: null,
+			_useCustomeFetch: null,
 		});
 	}
 	get network() {
@@ -64,14 +68,26 @@ class App extends AppBase {
 	set phrase(phrase) {
 		this._phrase = phrase;
 	}
+	get useCustomeFetch() {
+		if (cutil.na(this._useCustomeFetch)) {
+			this._useCustomeFetch = this.prefs.useCustomeFetch;
+		}
+		return this._useCustomeFetch;
+	}
+	set useCustomeFetch(useCustomeFetch) {
+		this._useCustomeFetch = useCustomeFetch;
+	}
 	async toDefineInitOptions() {
 		await super.toDefineInitOptions();
 		let app = this;
+		await app.toDefineInitOptionsDumper();
 		app.commander.option("-n, --network <network>", "network (mainnet/stagenet)");
 		app.commander.option("--set-network <network>", "set network permanently (mainnet/stagenet)");
 		app.commander.option("-k, --key <key>", "pass key");
 		app.commander.option("--set-key <key>", "set pass key permanently");
 		app.commander.option("-p, --phrase <phrase>", "mnemonic phrase");
+		app.commander.option("-f, --fetch", "use custom fetch");
+		app.commander.command("run");
 		app.commander.command("send")
 			.description("send funds to another address")
 			.argument("<asset>", "asset to send")
@@ -107,6 +123,10 @@ class App extends AppBase {
 	async toApplyInitOptions() {
 		await super.toApplyInitOptions();
 		let app = this;
+		await app.toApplyInitOptionsDumper();
+		
+		axios.interceptors.request.use(config => ({...config, fetch}));
+		cosmosclient.config.globalAxios.interceptors.request.use(config => ({...config, fetch}));
 		
 		register9Rheader(cosmosclient.config.globalAxios)
 		register9Rheader(axios);
