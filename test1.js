@@ -1,5 +1,6 @@
-import cosmosclientcore from "@cosmos-client/core";
-const {default: cosmosclient} = cosmosclientcore;
+import {CryptoAmount, assetAmount, baseAmount, assetFromString, assetToBase, baseToAsset, register9Rheader} from "@xchainjs/xchain-util";
 
-console.log(cosmosclientcore);
-console.log(cosmosclient);
+let a = baseAmount(777.9, 5);
+
+console.log(a);
+console.log(a.amount().toString());
