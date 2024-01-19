@@ -4,7 +4,7 @@ import cosmosclientcore from "@cosmos-client/core"; const {default: cosmosclient
 import {Network} from "@xchainjs/xchain-client";
 import {Midgard, MidgardCache, MidgardQuery} from "@xchainjs/xchain-midgard-query"
 import xchainthorchainquery from "@xchainjs/xchain-thorchain-query"; const {ThorchainCache, ThorchainQuery, Thornode, TransactionStage} = xchainthorchainquery;
-import {CryptoAmount, assetAmount, baseAmount, assetFromString, assetToBase, baseToAsset, formatBaseAsAssetAmount, register9Rheader} from "@xchainjs/xchain-util";
+import {CryptoAmount, assetToString, assetAmount, baseAmount, assetFromString, assetToBase, baseToAsset, formatBaseAsAssetAmount, register9Rheader} from "@xchainjs/xchain-util";
 import {Wallet} from "@xchainjs/xchain-thorchain-amm";
 import axios from "axios";
 
@@ -333,12 +333,16 @@ class App extends cutil.mixin(AppBase, dumper) {
 			if (cutil.isObject(x)) {
 				for (let k in x) {
 					if (x[k] instanceof Date) {
-						x[k] = df(x[k]);
+						try {
+							x[k] = df(x[k]);
+						} catch(e) {}
 					} else if (x[k] instanceof CryptoAmount) {
-						// maybe a bug in transactionStage.checkTxProgress
-						let amount = baseAmount(x[k].baseAmount.amount());
-						let decimal = x[k].baseAmount.decimal;
-						x[k] = formatBaseAsAssetAmount({amount, decimal});
+						try {
+							// maybe a bug in transactionStage.checkTxProgress
+							let amount = baseAmount(x[k].baseAmount.amount());
+							let decimal = x[k].baseAmount.decimal;
+							x[k] = formatBaseAsAssetAmount({amount, decimal}) + " " + assetToString(x[k].asset);
+						} catch(e) {}
 					} else {
 						makePresentable(x[k]);
 					}
