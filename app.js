@@ -1,12 +1,15 @@
 import dateformat from "dateformat";
 
 import cosmosclientcore from "@cosmos-client/core"; const {default: cosmosclient} = cosmosclientcore;
-import {Network} from "@xchainjs/xchain-client"
+import {Network} from "@xchainjs/xchain-client";
 import {Midgard, MidgardCache, MidgardQuery} from "@xchainjs/xchain-midgard-query"
 import xchainthorchainquery from "@xchainjs/xchain-thorchain-query"; const {ThorchainCache, ThorchainQuery, Thornode, TransactionStage} = xchainthorchainquery;
 import {CryptoAmount, assetAmount, assetFromString, assetToBase, register9Rheader} from "@xchainjs/xchain-util";
 import {Wallet} from "@xchainjs/xchain-thorchain-amm";
 import axios from "axios";
+
+import {Client as DashClient, defaultDashParams} from "@xchainjs/xchain-dash";
+import {Client as KujiraClient, defaultKujiParams} from "@xchainjs/xchain-kujira";
 
 import {cutil} from "@ghasemkiani/base";
 import {fetch} from "@ghasemkiani/fetch";
@@ -143,7 +146,17 @@ class App extends cutil.mixin(AppBase, dumper) {
 	}
 	get wallet() {
 		if (cutil.na(this._wallet)) {
-			this._wallet = new Wallet(this.phrase, this.thorchainQuery);
+			let {phrase} = this;
+			let {thorchainQuery} = this;
+			let wallet = new Wallet(phrase, thorchainQuery);
+			let {network} = this;
+			if (!("DASH" in wallet.clients)) {
+				wallet.clients["DASH"] = new DashClient({...defaultDashParams, network, phrase});
+			}
+			if (!("KUJI" in wallet.clients)) {
+				wallet.clients["KUJI"] = new KujiraClient({...defaultKujiParams, network, phrase});
+			}
+			this._wallet = wallet;
 		}
 		return this._wallet;
 	}
@@ -164,6 +177,13 @@ class App extends cutil.mixin(AppBase, dumper) {
 		app.commander.option("--no-fetch", "don't use custom fetch");
 		app.commander.option("--no-set-fetch", "don't use custom fetch persistently");
 		app.commander.command("run");
+		app.commander.command("addr")
+			.description("show addresses")
+			.action(async () => {
+				app.sub("run", async () => {
+					await app.toShowAddresses();
+				})
+			});
 		app.commander.command("send")
 			.description("send funds to another address")
 			.argument("<asset>", "asset to send")
@@ -261,25 +281,31 @@ class App extends cutil.mixin(AppBase, dumper) {
 			cosmosclient.config.globalAxios.interceptors.request.use(config => ({...config, fetch}));
 		}
 	}
+	async toShowAddresses() {
+		let app = this;
+		try {
+			let {wallet} = app;
+			let {phrase} = app;
+			let addresses = Object.entries(await wallet.clients).map(([chain, client]) => ({chain, address: client.getAddress()}));
+			console.log(addresses.map(({chain, address}) => [chain.padEnd(8), address.padStart(48)].join("\t")).join("\n"));
+		} catch(e) {
+			console.log(e);
+		}
+	}
 	async toSend({asset, amount, decimals = "8", toAddress, memo}) {
 		let app = this;
 		try {
-			let {phrase: seed} = app;
-			let {network} = app;
-			let midgardCache = new MidgardCache(new Midgard(network));
-			let thorchainCache = new ThorchainCache(new Thornode(network), new MidgardQuery(midgardCache));
-			let thorchainQuery = new ThorchainQuery(thorchainCache);
-			let wallet = new Wallet(seed, thorchainQuery);
+			let {wallet} = app;
 			console.log(`\ Send on ${network} :)\n`);
 			decimals = cutil.asNumber(decimals);
 			amount = assetAmount(amount, decimals);
 			asset = assetFromString(asset);
-			let destinationAddress = toAddress;
+			let recipient = toAddress;
 			let toChain = asset.synth ? THORChain : asset.chain;
 			let client = wallet.clients[toChain];
-			console.log(`sending ${amount.amount().toFixed()} ${asset.chain} to ${destinationAddress}`);
+			console.log(`sending ${amount.amount().toFixed()} ${asset.chain} to ${recipient}`);
 			let tx = await client.transfer({
-				recipient: destinationAddress,
+				recipient,
 				amount: assetToBase(amount),
 				memo,
 			});
