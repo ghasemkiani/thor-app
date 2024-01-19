@@ -1,18 +1,9 @@
 import dateformat from "dateformat";
 
-import cosmosclientcore from "@cosmos-client/core";
-const { default: cosmosclient } = cosmosclientcore;
+import cosmosclientcore from "@cosmos-client/core"; const {default: cosmosclient} = cosmosclientcore;
 import {Network} from "@xchainjs/xchain-client"
 import {Midgard, MidgardCache, MidgardQuery} from "@xchainjs/xchain-midgard-query"
-import xchainthorchainquery from "@xchainjs/xchain-thorchain-query";
-const {
-	QuoteSwapParams,
-	SwapEstimate,
-	ThorchainCache,
-	ThorchainQuery,
-	Thornode,
-	TxDetails,
-} = xchainthorchainquery;
+import xchainthorchainquery from "@xchainjs/xchain-thorchain-query"; const {ThorchainCache, ThorchainQuery, Thornode, TransactionStage} = xchainthorchainquery;
 import {CryptoAmount, assetAmount, assetFromString, assetToBase, register9Rheader} from "@xchainjs/xchain-util";
 import {Wallet} from "@xchainjs/xchain-thorchain-amm";
 import axios from "axios";
@@ -35,20 +26,21 @@ class App extends cutil.mixin(AppBase, dumper) {
 				passkey: null,
 				useCustomeFetch: false,
 			},
-			_network: null,
 			_passkey: null,
 			_phrase: null,
+			_index: null,
 			_useCustomeFetch: null,
+			_network: null,
+			_midgard: null,
+			_thornode: null,
+			_midgardCache: null,
+			_midgardQuery: null,
+			_thorchainCache: null,
+			_thorchainQuery: null,
+			_wallet: null,
+			affiliateAddress: null,
+			affiliateBps: 0,
 		});
-	}
-	get network() {
-		if (cutil.na(this._network)) {
-			this._network = this.prefs.network || "mainnet";
-		}
-		return this._network;
-	}
-	set network(network) {
-		this._network = network;
 	}
 	get passkey() {
 		if (cutil.na(this._passkey)) {
@@ -68,6 +60,15 @@ class App extends cutil.mixin(AppBase, dumper) {
 	set phrase(phrase) {
 		this._phrase = phrase;
 	}
+	get index() {
+		if (cutil.na(this._index)) {
+			this._index = 0;
+		}
+		return this._index;
+	}
+	set index(index) {
+		this._index = index;
+	}
 	get useCustomeFetch() {
 		if (cutil.na(this._useCustomeFetch)) {
 			this._useCustomeFetch = this.prefs.useCustomeFetch;
@@ -76,6 +77,78 @@ class App extends cutil.mixin(AppBase, dumper) {
 	}
 	set useCustomeFetch(useCustomeFetch) {
 		this._useCustomeFetch = useCustomeFetch;
+	}
+	get network() {
+		if (cutil.na(this._network)) {
+			this._network = this.prefs.network || "mainnet";
+		}
+		return this._network;
+	}
+	set network(network) {
+		this._network = network;
+	}
+	get midgard() {
+		if (cutil.na(this._midgard)) {
+			this._midgard = new Midgard(this.network);
+		}
+		return this._midgard;
+	}
+	set midgard(midgard) {
+		this._midgard = midgard;
+	}
+	get thornode() {
+		if (cutil.na(this._thornode)) {
+			this._thornode = new Thornode(this.network);
+		}
+		return this._thornode;
+	}
+	set thornode(thornode) {
+		this._thornode = thornode;
+	}
+	get midgardCache() {
+		if (cutil.na(this._midgardCache)) {
+			this._midgardCache = new MidgardCache(this.midgard);
+		}
+		return this._midgardCache;
+	}
+	set midgardCache(midgardCache) {
+		this._midgardCache = midgardCache;
+	}
+	get midgardQuery() {
+		if (cutil.na(this._midgardQuery)) {
+			this._midgardQuery = new MidgardQuery(this.midgardCache);
+		}
+		return this._midgardQuery;
+	}
+	set midgardQuery(midgardQuery) {
+		this._midgardQuery = midgardQuery;
+	}
+	get thorchainCache() {
+		if (cutil.na(this._thorchainCache)) {
+			this._thorchainCache = new ThorchainCache(this.thornode, this.midgardQuery);
+		}
+		return this._thorchainCache;
+	}
+	set thorchainCache(thorchainCache) {
+		this._thorchainCache = thorchainCache;
+	}
+	get thorchainQuery() {
+		if (cutil.na(this._thorchainQuery)) {
+			this._thorchainQuery = new ThorchainQuery(this.thorchainCache);
+		}
+		return this._thorchainQuery;
+	}
+	set thorchainQuery(thorchainQuery) {
+		this._thorchainQuery = thorchainQuery;
+	}
+	get wallet() {
+		if (cutil.na(this._wallet)) {
+			this._wallet = new Wallet(this.phrase, this.thorchainQuery);
+		}
+		return this._wallet;
+	}
+	set wallet(wallet) {
+		this._wallet = wallet;
 	}
 	async toDefineInitOptions() {
 		await super.toDefineInitOptions();
@@ -110,6 +183,14 @@ class App extends cutil.mixin(AppBase, dumper) {
 					await app.toShowPools();
 				})
 			});
+		app.commander.command("check")
+			.description("check tx status")
+			.argument("<hash>", "tx to check")
+			.action(async (hash) => {
+				app.sub("run", async () => {
+					await app.toCheckTx({hash});
+				})
+			});
 		app.commander.command("swap?")
 			.description("estimate swap")
 			.argument("<assets>", "assets (in/out)")
@@ -120,6 +201,18 @@ class App extends cutil.mixin(AppBase, dumper) {
 			.action(async (assets, {amount, decimals, tolerance, address}) => {
 				app.sub("run", async () => {
 					await app.toEstimateSwap({assets, amount, decimals, tolerance, address});
+				})
+			});
+		app.commander.command("swap")
+			.description("swap")
+			.argument("<assets>", "assets (in/out)")
+			.option("-i, --amount <amount>", "input amount")
+			.option("-d, --decimals <decimals>", "decimals")
+			.option("-t, --tolerance <tolerance>", "slippage tolerance")
+			.option("-a, --address <address>", "destination address")
+			.action(async (assets, {amount, decimals, tolerance, address}) => {
+				app.sub("run", async () => {
+					await app.toSwap({assets, amount, decimals, tolerance, address});
 				})
 			});
 	}
@@ -172,7 +265,6 @@ class App extends cutil.mixin(AppBase, dumper) {
 		let app = this;
 		try {
 			let {phrase: seed} = app;
-			console.log(seed);
 			let {network} = app;
 			let midgardCache = new MidgardCache(new Midgard(network));
 			let thorchainCache = new ThorchainCache(new Thornode(network), new MidgardQuery(midgardCache));
@@ -206,6 +298,27 @@ class App extends cutil.mixin(AppBase, dumper) {
 			console.log(e);
 		}
 	}
+	async toCheckTx({hash}) {
+		let app = this;
+		let {thorchainCache} = app;
+		let transactionStage = new TransactionStage(thorchainCache);
+		let result = await transactionStage.checkTxProgress(hash);
+		function makePresentable(x) {
+			if (cutil.isObject(x)) {
+				for (let k in x) {
+					if (x[k] instanceof Date) {
+						x[k] = df(x[k]);
+					} else if (x[k] instanceof CryptoAmount) {
+						x[k] = x[k].formatedAssetString();
+					} else {
+						makePresentable(x[k]);
+					}
+				}
+			}
+		}
+		makePresentable(result);
+		console.log(JSON.stringify(result, null, 4));
+	}
 	async toEstimateSwap({assets, amount, decimals = "8", tolerance = "0.01", address}) {
 		let app = this;
 		try {
@@ -214,7 +327,6 @@ class App extends cutil.mixin(AppBase, dumper) {
 			let [assetIn, assetOut] = cutil.asString(assets).split("/");
 			let fromAsset = assetFromString(assetIn);
 			let toAsset = assetFromString(assetOut);
-			// amount = cutil.asNumber(amount);
 			decimals = cutil.asNumber(decimals);
 			let toDestinationAddress = address;
 			let midgardCache = new MidgardCache(new Midgard(network));
@@ -228,7 +340,6 @@ class App extends cutil.mixin(AppBase, dumper) {
 				toleranceBps,
 			};
 			let txDetails = await thorchainQuery.quoteSwap(swapParams);
-			// console.log(txDetails);
 			let estimate = txDetails.txEstimate;
 			let input = swapParams.amount;
 			let txEstimate = {
@@ -251,6 +362,98 @@ class App extends cutil.mixin(AppBase, dumper) {
 				txEstimate,
 			};
 			console.log(output);
+		} catch (e) {
+			console.log(e);
+		}
+	}
+	async toSwap({assets, amount, decimals = "8", tolerance = "0.01", streamingInterval = "0", streamingQuantity = "0", address}) {
+		let app = this;
+		try {
+			let {network} = app;
+			let {phrase: seed} = app;
+			let {index: walletIndex} = app;
+			let midgardCache = new MidgardCache(new Midgard(network));
+			let thorchainCache = new ThorchainCache(new Thornode(network), new MidgardQuery(midgardCache));
+			let thorchainQuery = new ThorchainQuery(thorchainCache);
+			let thorchainAmm = new ThorchainAMM(thorchainQuery);
+			let wallet = new Wallet(seed, thorchainQuery);
+			let [assetIn, assetOut] = cutil.asString(assets).split("/");
+			let fromAsset = assetFromString(assetIn);
+			let toAsset = assetFromString(assetOut);
+			decimals = cutil.asNumber(decimals);
+			let toChain = toAsset.synth ? THORChain : toAsset.chain;
+			let destinationAddress = address || wallet.clients[toChain].getAddress();
+			let toleranceBps = cutil.asNumber(tolerance) * 1e4;
+			let swapParams = {
+				fromAsset,
+				amount: new CryptoAmount(assetToBase(assetAmount(amount, decimals)), fromAsset),
+				destinationAsset: toAsset,
+				destinationAddress,
+				toleranceBps,
+				wallet,
+				walletIndex,
+			};
+			let {affiliateAddress} = app;
+			if (cutil.a(affiliateAddress)) {
+				let {affiliateBps} = app;
+				cutil.assign(swapParams, {affiliateAddress, affiliateBps});
+			}
+			
+			streamingInterval = cutil.asNumber(streamingInterval);
+			streamingQuantity = cutil.asNumber(streamingQuantity);
+			if (streamingInterval > 0) {
+				delete swapParams.toleranceBps;
+				cutil.assign(swapParams, {streamingInterval, streamingQuantity});
+			}
+			
+			let outPutCanSwap = await thorchainAmm.estimateSwap(swapParams);
+			let txDetails = outPutCanSwap;
+			let input = swapParams.amount;
+			console.log({
+				memo: txDetails.memo,
+				expiry: txDetails.expiry,
+				toAddress: txDetails.toAddress,
+				txEstimate: {
+					input: input.formatedAssetString(),
+					totalFees: {
+						asset: assetToString(txDetails.txEstimate.totalFees.asset),
+						outboundFee: txDetails.txEstimate.totalFees.outboundFee.formatedAssetString(),
+						affiliateFee: txDetails.txEstimate.totalFees.affiliateFee.formatedAssetString(),
+					},
+					slipBasisPoints: txDetails.txEstimate.slipBasisPoints.toFixed(),
+					netOutput: txDetails.txEstimate.netOutput.formatedAssetString(),
+					outboundDelaySeconds: txDetails.txEstimate.outboundDelaySeconds,
+					canSwap: txDetails.txEstimate.canSwap,
+					errors: txDetails.txEstimate.errors,
+				},
+			});
+			if (outPutCanSwap.txEstimate.canSwap) {
+				let output = await tcAmm.doSwap(wallet, swapParams);
+				console.log(`Tx hash: ${output.hash},\n Tx url: ${output.url}\n WaitTime: ${outPutCanSwap.txEstimate.outboundDelaySeconds}`);
+				console.log("Waiting for transaction to be confirmed...");
+				let message = "hash";
+				let delayMs = outPutCanSwap.txEstimate.outboundDelaySeconds <= 6 ? (streamingInterval > 0 ? 20000 : 12000) : outPutCanSwap.txEstimate.outboundDelaySeconds * 1000;
+				let startTime = new Date().getTime();
+				let endTime = startTime + delayMs;
+				let remainingTime = delayMs;
+				while (remainingTime > 0) {
+					let elapsedMs = delayMs - remainingTime;
+					let remainingSeconds = Math.ceil(remainingTime / 1000);
+					let elapsedSeconds = Math.floor(elapsedMs / 1000);
+					let progress = Math.floor((elapsedMs / delayMs) * 100);
+
+					console.log(`${message} (${elapsedSeconds}s/${remainingSeconds}s ${progress}%)`);
+
+					await delay(500);
+					remainingTime = endTime - new Date().getTime();
+				}
+				console.log(`${message} (Done!)`);
+				let transactionStage = new TransactionStage(thorchainCache);
+				let checkTransaction = await transactionStage.checkTxProgress(output.hash);
+				console.log(`\ Checking on ${network} :)\n`);
+				console.log(checkTransaction.txType);
+				console.log(checkTransaction);
+			}
 		} catch (e) {
 			console.log(e);
 		}
