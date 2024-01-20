@@ -5,7 +5,7 @@ import {Network} from "@xchainjs/xchain-client";
 import {Midgard, MidgardCache, MidgardQuery} from "@xchainjs/xchain-midgard-query"
 import xchainthorchainquery from "@xchainjs/xchain-thorchain-query"; const {ThorchainCache, ThorchainQuery, Thornode, TransactionStage} = xchainthorchainquery;
 import {CryptoAmount, assetToString, assetAmount, baseAmount, assetFromString, assetToBase, baseToAsset, formatBaseAsAssetAmount, register9Rheader} from "@xchainjs/xchain-util";
-import {Wallet} from "@xchainjs/xchain-thorchain-amm";
+import {Wallet, ThorchainAMM} from "@xchainjs/xchain-thorchain-amm";
 import axios from "axios";
 
 import {Client as DashClient, defaultDashParams} from "@xchainjs/xchain-dash";
@@ -410,7 +410,7 @@ class App extends cutil.mixin(AppBase, dumper) {
 			let thorchainQuery = new ThorchainQuery(thorchainCache);
 			let thorchainAmm = new ThorchainAMM(thorchainQuery);
 			let wallet = new Wallet(seed, thorchainQuery);
-			let [assetIn, assetOut] = cutil.asString(assets).split("/");
+			let [assetIn, assetOut] = cutil.asString(assets).split(":");
 			let fromAsset = assetFromString(assetIn);
 			let toAsset = assetFromString(assetOut);
 			decimals = cutil.asNumber(decimals);
@@ -461,8 +461,8 @@ class App extends cutil.mixin(AppBase, dumper) {
 				},
 			});
 			if (outPutCanSwap.txEstimate.canSwap) {
-				let output = await tcAmm.doSwap(wallet, swapParams);
-				console.log(`Tx hash: ${output.hash},\n Tx url: ${output.url}\n WaitTime: ${outPutCanSwap.txEstimate.outboundDelaySeconds}`);
+				let output = await thorchainAmm.doSwap(wallet, swapParams);
+				console.log(`Tx hash: ${output.hash}\nTx url: ${output.url}\nWaitTime: ${outPutCanSwap.txEstimate.outboundDelaySeconds}`);
 				console.log("Waiting for transaction to be confirmed...");
 				let message = "hash";
 				let delayMs = outPutCanSwap.txEstimate.outboundDelaySeconds <= 6 ? (streamingInterval > 0 ? 20000 : 12000) : outPutCanSwap.txEstimate.outboundDelaySeconds * 1000;
@@ -477,7 +477,7 @@ class App extends cutil.mixin(AppBase, dumper) {
 
 					console.log(`${message} (${elapsedSeconds}s/${remainingSeconds}s ${progress}%)`);
 
-					await delay(500);
+					await cutil.toSleep(500);
 					remainingTime = endTime - new Date().getTime();
 				}
 				console.log(`${message} (Done!)`);

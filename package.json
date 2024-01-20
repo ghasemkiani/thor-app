@@ -1,6 +1,6 @@
 {
 	"name": "@ghasemkiani/thor-app",
-	"version": "1.0.7",
+	"version": "1.1.0",
 	"description": "",
 	"type": "module",
 	"main": "index.js",
@@ -16,10 +16,10 @@
 	"dependencies": {
 		"@binance-chain/javascript-sdk": "^4.2.2",
 		"@cosmos-client/core": "^0.46.1",
-		"@ghasemkiani/base": "file:../base",
-		"@ghasemkiani/base-app": "file:../base-app",
-		"@ghasemkiani/fetch": "file:../fetch",
-		"@ghasemkiani/pass": "file:../pass",
+		"@ghasemkiani/base": "github:ghasemkiani/base",
+		"@ghasemkiani/base-app": "github:ghasemkiani/base-app",
+		"@ghasemkiani/fetch": "github:ghasemkiani/fetch",
+		"@ghasemkiani/pass": "gitlab:ghasemkiani/pass",
 		"@psf/bitcoincashjs-lib": "^4.0.3",
 		"@xchainjs/xchain-binance": "^5.7.9",
 		"@xchainjs/xchain-bitcoin": "^0.23.10",
