@@ -218,9 +218,11 @@ class App extends cutil.mixin(AppBase, dumper) {
 			.option("-d, --decimals <decimals>", "decimals")
 			.option("-t, --tolerance <tolerance>", "slippage tolerance")
 			.option("-a, --address <address>", "destination address")
-			.action(async (assets, {amount, decimals, tolerance, address}) => {
+			.option("-si, --streaming-interval <streamingInterval>", "streaming interval")
+			.option("-sn, --streaming-quantity <streamingQuantity>", "streaming quantity")
+			.action(async (assets, {amount, decimals, tolerance, address, streamingInterval, streamingQuantity}) => {
 				app.sub("run", async () => {
-					await app.toEstimateSwap({assets, amount, decimals, tolerance, address});
+					await app.toEstimateSwap({assets, amount, decimals, tolerance, address, streamingInterval, streamingQuantity});
 				})
 			});
 		app.commander.command("swap")
@@ -230,9 +232,11 @@ class App extends cutil.mixin(AppBase, dumper) {
 			.option("-d, --decimals <decimals>", "decimals")
 			.option("-t, --tolerance <tolerance>", "slippage tolerance")
 			.option("-a, --address <address>", "destination address")
-			.action(async (assets, {amount, decimals, tolerance, address}) => {
+			.option("-si, --streaming-interval <streamingInterval>", "streaming interval")
+			.option("-sn, --streaming-quantity <streamingQuantity>", "streaming quantity")
+			.action(async (assets, {amount, decimals, tolerance, address, streamingInterval, streamingQuantity}) => {
 				app.sub("run", async () => {
-					await app.toSwap({assets, amount, decimals, tolerance, address});
+					await app.toSwap({assets, amount, decimals, tolerance, address, streamingInterval, streamingQuantity});
 				})
 			});
 	}
@@ -352,16 +356,17 @@ class App extends cutil.mixin(AppBase, dumper) {
 		makePresentable(result);
 		console.log(JSON.stringify(result, null, 4));
 	}
-	async toEstimateSwap({assets, amount, decimals = "8", tolerance = "0.01", address}) {
+	async toEstimateSwap({assets, amount, decimals = "8", tolerance = "0.02", address, streamingInterval = "0", streamingQuantity = "0"}) {
 		let app = this;
 		try {
 			let {network} = app;
 			let toleranceBps = cutil.asNumber(tolerance) * 1e4;
-			let [assetIn, assetOut] = cutil.asString(assets).split("/");
+			let [assetIn, assetOut] = cutil.asString(assets).split(":");
 			let fromAsset = assetFromString(assetIn);
 			let toAsset = assetFromString(assetOut);
 			decimals = cutil.asNumber(decimals);
-			let toDestinationAddress = address;
+			let toChain = toAsset.synth ? "THOR" : toAsset.chain;
+			let destinationAddress = address || app?.wallet?.clients[toChain].getAddress();
 			let midgardCache = new MidgardCache(new Midgard(network));
 			let thorchainCache = new ThorchainCache(new Thornode(network), new MidgardQuery(midgardCache));
 			let thorchainQuery = new ThorchainQuery(thorchainCache);
@@ -369,10 +374,18 @@ class App extends cutil.mixin(AppBase, dumper) {
 				fromAsset,
 				destinationAsset: toAsset,
 				amount: new CryptoAmount(assetToBase(assetAmount(amount, decimals)), fromAsset),
-				destinationAddress: toDestinationAddress,
+				destinationAddress,
 				toleranceBps,
 			};
+			streamingInterval = cutil.asNumber(streamingInterval);
+			streamingQuantity = cutil.asNumber(streamingQuantity);
+			if (streamingInterval > 0) {
+				// delete swapParams.toleranceBps;
+				cutil.assign(swapParams, {streamingInterval, streamingQuantity});
+			}
+			
 			let txDetails = await thorchainQuery.quoteSwap(swapParams);
+			// console.log(txDetails);
 			let estimate = txDetails.txEstimate;
 			let input = swapParams.amount;
 			let txEstimate = {
@@ -383,6 +396,7 @@ class App extends cutil.mixin(AppBase, dumper) {
 				},
 				slipBasisPoints: estimate.slipBasisPoints.toFixed(),
 				netOutput: estimate.netOutput.formatedAssetString(),
+				netOutputStreaming: estimate.netOutputStreaming?.formatedAssetString(),
 				inboundConfirmationSeconds: estimate.inboundConfirmationSeconds,
 				outboundDelaySeconds: estimate.outboundDelaySeconds,
 				canSwap: estimate.canSwap,
@@ -399,7 +413,7 @@ class App extends cutil.mixin(AppBase, dumper) {
 			console.log(e);
 		}
 	}
-	async toSwap({assets, amount, decimals = "8", tolerance = "0.01", streamingInterval = "0", streamingQuantity = "0", address}) {
+	async toSwap({assets, amount, decimals = "8", tolerance = "0.02", streamingInterval = "0", streamingQuantity = "0", address}) {
 		let app = this;
 		try {
 			let {network} = app;
@@ -414,7 +428,7 @@ class App extends cutil.mixin(AppBase, dumper) {
 			let fromAsset = assetFromString(assetIn);
 			let toAsset = assetFromString(assetOut);
 			decimals = cutil.asNumber(decimals);
-			let toChain = toAsset.synth ? THORChain : toAsset.chain;
+			let toChain = toAsset.synth ? "THOR" : toAsset.chain;
 			let destinationAddress = address || wallet.clients[toChain].getAddress();
 			let toleranceBps = cutil.asNumber(tolerance) * 1e4;
 			let swapParams = {
@@ -435,7 +449,7 @@ class App extends cutil.mixin(AppBase, dumper) {
 			streamingInterval = cutil.asNumber(streamingInterval);
 			streamingQuantity = cutil.asNumber(streamingQuantity);
 			if (streamingInterval > 0) {
-				delete swapParams.toleranceBps;
+				// delete swapParams.toleranceBps;
 				cutil.assign(swapParams, {streamingInterval, streamingQuantity});
 			}
 			
