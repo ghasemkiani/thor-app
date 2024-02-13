@@ -221,9 +221,10 @@ class App extends cutil.mixin(AppBase, dumper) {
 			.description("deposit RUNE with custom memo")
 			.option("-a, --amount <amount>", "amount to send")
 			.option("-m, --memo <memo>", "transaction memo")
-			.action(async ({amount, memo}) => {
+			.option("-y, --yes", "don't ask for confirmation")
+			.action(async ({amount, memo, yes}) => {
 				app.sub("run", async () => {
-					await app.toMsgDeposit({amount, memo});
+					await app.toMsgDeposit({amount, memo, yes});
 				})
 			});
 		app.commander.command("pools")
@@ -379,14 +380,14 @@ class App extends cutil.mixin(AppBase, dumper) {
 			console.log(e);
 		}
 	}
-	async toMsgDeposit({amount = (1e-8).toFixed(8), memo}) {
+	async toMsgDeposit({amount = (1e-8).toFixed(8), memo, yes = false}) {
 		let app = this;
 		try {
 			let runeAsset = AssetRuneNative;
 			let rune = new CryptoAmount(assetToBase(xChainUtil.assetAmount(amount)), runeAsset);
 			let {wallet} = app;
 			let client = wallet.clients["THOR"];
-			if (await Inputter.toConfirm(`Deposit ${rune.formatedAssetString()}?`)) {
+			if (yes || (await Inputter.toConfirm(`Deposit ${rune.formatedAssetString()}?`))) {
 				let hash = await client.deposit({
 					asset: rune.asset,
 					amount: rune.baseAmount,
