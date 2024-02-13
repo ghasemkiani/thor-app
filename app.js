@@ -17,6 +17,7 @@ import {Client as KujiraClient, defaultKujiParams} from "@xchainjs/xchain-kujira
 
 import {cutil} from "@ghasemkiani/base";
 import {fetch} from "@ghasemkiani/fetch";
+import {Inputter} from "@ghasemkiani/io";
 import {App as AppBase} from "@ghasemkiani/base-app";
 import {dumper} from "@ghasemkiani/base-app";
 import {SysPass} from "@ghasemkiani/pass";
@@ -189,8 +190,8 @@ class App extends cutil.mixin(AppBase, dumper) {
 		await app.toDefineInitOptionsDumper();
 		app.commander.option("-n, --network <network>", "network (mainnet/stagenet)");
 		app.commander.option("--set-network <network>", "set network persistently (mainnet/stagenet)");
-		app.commander.option("-k, --key <key>", "pass key");
-		app.commander.option("--set-key <key>", "set pass key persistently");
+		app.commander.option("-k, --key <key>", "pass key for phrase");
+		app.commander.option("--set-key <key>", "set pass key for phrase persistently");
 		app.commander.option("-p, --phrase <phrase>", "mnemonic phrase");
 		app.commander.option("-f, --fetch", "use custom fetch");
 		app.commander.option("--set-fetch", "use custom fetch persistently");
@@ -214,6 +215,15 @@ class App extends cutil.mixin(AppBase, dumper) {
 			.action(async (asset, {amount, decimals, toAddress, memo}) => {
 				app.sub("run", async () => {
 					await app.toSend({asset, amount, decimals, toAddress, memo});
+				})
+			});
+		app.commander.command("msg")
+			.description("deposit RUNE with custom memo")
+			.option("-a, --amount <amount>", "amount to send")
+			.option("-m, --memo <memo>", "transaction memo")
+			.action(async ({amount, memo}) => {
+				app.sub("run", async () => {
+					await app.toMsgDeposit({amount, memo});
 				})
 			});
 		app.commander.command("pools")
@@ -365,6 +375,27 @@ class App extends cutil.mixin(AppBase, dumper) {
 				memo,
 			});
 			console.log(tx);
+		} catch (e) {
+			console.log(e);
+		}
+	}
+	async toMsgDeposit({amount = (1e-8).toFixed(8), memo}) {
+		let app = this;
+		try {
+			let runeAsset = AssetRuneNative;
+			let rune = new CryptoAmount(assetToBase(xChainUtil.assetAmount(amount)), runeAsset);
+			let {wallet} = app;
+			let client = wallet.clients["THOR"];
+			if (await Inputter.toConfirm(`Deposit ${rune.formatedAssetString()}?`)) {
+				let hash = await client.deposit({
+					asset: rune.asset,
+					amount: rune.baseAmount,
+					memo,
+				});
+				console.log(hash);
+			} else {
+				console.log("Aborted by user!");
+			}
 		} catch (e) {
 			console.log(e);
 		}

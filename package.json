@@ -1,6 +1,6 @@
 {
 	"name": "@ghasemkiani/thor-app",
-	"version": "1.1.5",
+	"version": "1.1.6",
 	"description": "",
 	"type": "module",
 	"main": "index.js",
@@ -23,6 +23,7 @@
 		"@ghasemkiani/base": "github:ghasemkiani/base",
 		"@ghasemkiani/base-app": "github:ghasemkiani/base-app",
 		"@ghasemkiani/fetch": "github:ghasemkiani/fetch",
+		"@ghasemkiani/io": "github:ghasemkiani/io",
 		"@ghasemkiani/pass": "gitlab:ghasemkiani/pass",
 		"@psf/bitcoincashjs-lib": "^4.0.3",
 		"@xchainjs/xchain-binance": "^5.7.9",
