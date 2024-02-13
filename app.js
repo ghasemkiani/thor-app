@@ -1,12 +1,15 @@
 import dateformat from "dateformat";
 
+import axios from "axios";
 import cosmosclientcore from "@cosmos-client/core"; const {default: cosmosclient} = cosmosclientcore;
 import {Network} from "@xchainjs/xchain-client";
 import {Midgard, MidgardCache, MidgardQuery} from "@xchainjs/xchain-midgard-query"
 import xchainthorchainquery from "@xchainjs/xchain-thorchain-query"; const {ThorchainCache, ThorchainQuery, Thornode, TransactionStage} = xchainthorchainquery;
-import {CryptoAmount, assetToString, assetAmount, baseAmount, assetFromString, assetToBase, baseToAsset, formatBaseAsAssetAmount, register9Rheader} from "@xchainjs/xchain-util";
+import {CryptoAmount, assetToString, assetAmount, baseAmount, assetFromString, assetFromStringEx, assetToBase, baseToAsset, formatBaseAsAssetAmount, register9Rheader} from "@xchainjs/xchain-util";
+import xChainUtil from "@xchainjs/xchain-util";
 import {Wallet, ThorchainAMM} from "@xchainjs/xchain-thorchain-amm";
-import axios from "axios";
+import {THORChain} from "@xchainjs/xchain-thorchain";
+import {isAssetRuneNative} from "@xchainjs/xchain-thorchain";
 
 import {Client as DashClient, defaultDashParams} from "@xchainjs/xchain-dash";
 import {Client as KujiraClient, defaultKujiParams} from "@xchainjs/xchain-kujira";
@@ -26,10 +29,10 @@ class App extends cutil.mixin(AppBase, dumper) {
 			prefsId: "gkthor",
 			defaultPrefs: {
 				network: "mainnet",
-				passkey: null,
+				kphrase: null,
 				useCustomeFetch: false,
 			},
-			_passkey: null,
+			_kphrase: null,
 			_phrase: null,
 			_index: null,
 			_useCustomeFetch: null,
@@ -45,18 +48,18 @@ class App extends cutil.mixin(AppBase, dumper) {
 			affiliateBps: 0,
 		});
 	}
-	get passkey() {
-		if (cutil.na(this._passkey)) {
-			this._passkey = this.prefs.passkey;
+	get kphrase() {
+		if (cutil.na(this._kphrase)) {
+			this._kphrase = this.prefs.kphrase;
 		}
-		return this._passkey;
+		return this._kphrase;
 	}
-	set passkey(passkey) {
-		this._passkey = passkey;
+	set kphrase(kphrase) {
+		this._kphrase = kphrase;
 	}
 	get phrase() {
-		if (cutil.na(this._phrase) && cutil.a(this.passkey)) {
-			this._phrase = pass.get(this.passkey);
+		if (cutil.na(this._phrase) && cutil.a(this.kphrase)) {
+			this._phrase = pass.get(this.kphrase);
 		}
 		return this._phrase;
 	}
@@ -163,6 +166,13 @@ class App extends cutil.mixin(AppBase, dumper) {
 	set wallet(wallet) {
 		this._wallet = wallet;
 	}
+	getAddressFor({chain, synth}) {
+		let app = this;
+		if (synth) {
+			chain = THORChain;
+		}
+		return app.wallet?.clients[chain].getAddress();
+	}
 	async toDefineInitOptions() {
 		await super.toDefineInitOptions();
 		let app = this;
@@ -239,6 +249,26 @@ class App extends cutil.mixin(AppBase, dumper) {
 					await app.toSwap({assets, amount, decimals, tolerance, address, streamingInterval, streamingQuantity});
 				})
 			});
+		app.commander.command("liq")
+			.description("check liquidity")
+			.argument("<assets>", "assets (comma separated)")
+			.option("-a, --address <address>", "address")
+			.action(async (assets, {address}) => {
+				app.sub("run", async () => {
+					await app.toCheckLiquidity({assets, address});
+				})
+			});
+		app.commander.command("add?")
+			.description("estimate add liquidity")
+			.argument("<assets>", "asset pair (e.g., THOR.RUNE:ETH.ETH, in that order)")
+			.option("-ra, --rune-amount <runeAmount>", "rune amount")
+			.option("-aa, --asset-amount <assetAmount>", "asset amount")
+			.option("-d, --decimals <decimals>", "asset decimals")
+			.action(async (assets, {runeAmount, assetAmount, decimals, address}) => {
+				app.sub("run", async () => {
+					await app.toEstimateAddLiquidity({assets, runeAmount, assetAmount, decimals});
+				})
+			});
 	}
 	async toApplyInitOptions() {
 		await super.toApplyInitOptions();
@@ -257,11 +287,11 @@ class App extends cutil.mixin(AppBase, dumper) {
 			app.network = opts.network;
 		}
 		if (cutil.a(opts.setKey)) {
-			app.passkey = null;
-			app.prefs.passkey = opts.setKey;
+			app.kphrase = null;
+			app.prefs.kphrase = opts.setKey;
 		}
 		if (cutil.a(opts.key)) {
-			app.passkey = opts.key;
+			app.kphrase = opts.key;
 		}
 		if (cutil.a(opts.phrase)) {
 			app.phrase = opts.phrase;
@@ -365,8 +395,7 @@ class App extends cutil.mixin(AppBase, dumper) {
 			let fromAsset = assetFromString(assetIn);
 			let toAsset = assetFromString(assetOut);
 			decimals = cutil.asNumber(decimals);
-			let toChain = toAsset.synth ? "THOR" : toAsset.chain;
-			let destinationAddress = address || app?.wallet?.clients[toChain].getAddress();
+			let destinationAddress = address || app.getAddressFor(toAsset);
 			let midgardCache = new MidgardCache(new Midgard(network));
 			let thorchainCache = new ThorchainCache(new Thornode(network), new MidgardQuery(midgardCache));
 			let thorchainQuery = new ThorchainQuery(thorchainCache);
@@ -428,8 +457,7 @@ class App extends cutil.mixin(AppBase, dumper) {
 			let fromAsset = assetFromString(assetIn);
 			let toAsset = assetFromString(assetOut);
 			decimals = cutil.asNumber(decimals);
-			let toChain = toAsset.synth ? "THOR" : toAsset.chain;
-			let destinationAddress = address || wallet.clients[toChain].getAddress();
+			let destinationAddress = address || app.getAddressFor(toAsset);
 			let toleranceBps = cutil.asNumber(tolerance) * 1e4;
 			let swapParams = {
 				fromAsset,
@@ -502,6 +530,69 @@ class App extends cutil.mixin(AppBase, dumper) {
 				console.log(checkTransaction);
 			}
 		} catch (e) {
+			console.log(e);
+		}
+	}
+	async toCheckLiquidity({assets, address: addr}) {
+		let app = this;
+		let {thorchainQuery} = app;
+		let ss = assets.split(",").map(s => s.trim()).filter(s => !!s);
+		for (let s of ss) {
+			let asset = assetFromString(s);
+			let address = addr || app.getAddressFor(asset);
+			try {
+				let lp = await thorchainQuery.checkLiquidityPosition(asset, address);
+				console.log(lp);
+				console.log({
+					address,
+					position: lp.position,
+					poolShare: {
+						assetShare: lp.poolShare.assetShare.formatedAssetString(),
+						runeShare: lp.poolShare.runeShare.formatedAssetString(),
+					},
+					lpGrowth: lp.lpGrowth,
+					impermanentLossProtection: {
+						ILProtection: lp.impermanentLossProtection.ILProtection.formatedAssetString(),
+						totalDays: lp.impermanentLossProtection.totalDays,
+					},
+				});
+			} catch(e) {
+				console.log(e.message);
+			}
+		}
+	}
+	async toEstimateAddLiquidity({assets, runeAmount, assetAmount, decimals}) {
+		try {
+			let app = this;
+			let {thorchainQuery} = app;
+			let [asset0, asset1] = cutil.asString(assets).split(":");
+			let runeAsset = assetFromStringEx(asset0);
+			let assetAsset = assetFromStringEx(asset1);
+			decimals = cutil.asNumber(decimals);
+			let rune = new CryptoAmount(assetToBase(xChainUtil.assetAmount(runeAmount)), runeAsset);
+			if (!isAssetRuneNative(rune.asset)) {
+				throw Error("THOR.RUNE  must be the first part in 'assets' duo");
+			}
+			let asset = new CryptoAmount(assetToBase(xChainUtil.assetAmount(assetAmount, decimals)), assetAsset);
+			let addLpParams = {rune, asset};
+			let estimate = await thorchainQuery.estimateAddLP(addLpParams);
+			console.log({
+				rune: rune.formatedAssetString(),
+				asset: asset.formatedAssetString(),
+				slipPercent: estimate.slipPercent.toFixed(4),
+				lpUnits: estimate.lpUnits.amount().toFixed(0),
+				runeToAssetRatio: estimate.runeToAssetRatio.toFixed(8),
+				transactionFee: {
+					assetFee: estimate.inbound.fees.asset.formatedAssetString(),
+					runeFee: estimate.inbound.fees.rune.formatedAssetString(),
+					totalFees: estimate.inbound.fees.total.formatedAssetString(),
+				},
+				estimatedWaitSeconds: estimate.estimatedWaitSeconds,
+				errors: estimate.errors,
+				canAdd: estimate.canAdd,
+			});
+		} catch (e) {
+			// console.log(e.message);
 			console.log(e);
 		}
 	}
