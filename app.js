@@ -9,6 +9,7 @@ import {CryptoAmount, assetToString, assetAmount, baseAmount, assetFromString, a
 import xChainUtil from "@xchainjs/xchain-util";
 import {Wallet, ThorchainAMM} from "@xchainjs/xchain-thorchain-amm";
 import {THORChain} from "@xchainjs/xchain-thorchain";
+import {AssetRuneNative} from "@xchainjs/xchain-thorchain";
 import {isAssetRuneNative} from "@xchainjs/xchain-thorchain";
 
 import {Client as DashClient, defaultDashParams} from "@xchainjs/xchain-dash";
@@ -147,6 +148,15 @@ class App extends cutil.mixin(AppBase, dumper) {
 	set thorchainQuery(thorchainQuery) {
 		this._thorchainQuery = thorchainQuery;
 	}
+	get thorchainAmm() {
+		if (cutil.na(this._thorchainAmm)) {
+			this._thorchainAmm = new ThorchainAMM(this.thorchainQuery);
+		}
+		return this._thorchainAmm;
+	}
+	set thorchainAmm(thorchainAmm) {
+		this._thorchainAmm = thorchainAmm;
+	}
 	get wallet() {
 		if (cutil.na(this._wallet)) {
 			let {phrase} = this;
@@ -260,13 +270,24 @@ class App extends cutil.mixin(AppBase, dumper) {
 			});
 		app.commander.command("add?")
 			.description("estimate add liquidity")
-			.argument("<assets>", "asset pair (e.g., THOR.RUNE:ETH.ETH, in that order)")
+			.argument("<asset-pool>", "asset pool (e.g., ETH.ETH, to be paired with Native RUNE)")
 			.option("-ra, --rune-amount <runeAmount>", "rune amount")
 			.option("-aa, --asset-amount <assetAmount>", "asset amount")
 			.option("-d, --decimals <decimals>", "asset decimals")
-			.action(async (assets, {runeAmount, assetAmount, decimals, address}) => {
+			.action(async (assetPool, {runeAmount, assetAmount, decimals}) => {
 				app.sub("run", async () => {
-					await app.toEstimateAddLiquidity({assets, runeAmount, assetAmount, decimals});
+					await app.toEstimateAddLiquidity({assetPool, runeAmount, assetAmount, decimals});
+				})
+			});
+		app.commander.command("add")
+			.description("add liquidity")
+			.argument("<asset-pool>", "asset pool (e.g., ETH.ETH, to be paired with Native RUNE)")
+			.option("-ra, --rune-amount <runeAmount>", "rune amount")
+			.option("-aa, --asset-amount <assetAmount>", "asset amount")
+			.option("-d, --decimals <decimals>", "asset decimals")
+			.action(async (assetPool, {runeAmount, assetAmount, decimals}) => {
+				app.sub("run", async () => {
+					await app.toAddLiquidity({assetPool, runeAmount, assetAmount, decimals});
 				})
 			});
 	}
@@ -561,13 +582,12 @@ class App extends cutil.mixin(AppBase, dumper) {
 			}
 		}
 	}
-	async toEstimateAddLiquidity({assets, runeAmount, assetAmount, decimals}) {
+	async toEstimateAddLiquidity({assetPool, runeAmount = "100", assetAmount = "0", decimals = "8"}) {
 		try {
 			let app = this;
 			let {thorchainQuery} = app;
-			let [asset0, asset1] = cutil.asString(assets).split(":");
-			let runeAsset = assetFromStringEx(asset0);
-			let assetAsset = assetFromStringEx(asset1);
+			let runeAsset = AssetRuneNative;
+			let assetAsset = assetFromStringEx(assetPool);
 			decimals = cutil.asNumber(decimals);
 			let rune = new CryptoAmount(assetToBase(xChainUtil.assetAmount(runeAmount)), runeAsset);
 			if (!isAssetRuneNative(rune.asset)) {
@@ -591,6 +611,28 @@ class App extends cutil.mixin(AppBase, dumper) {
 				errors: estimate.errors,
 				canAdd: estimate.canAdd,
 			});
+		} catch (e) {
+			// console.log(e.message);
+			console.log(e);
+		}
+	}
+	async toAddLiquidity({assetPool, runeAmount, assetAmount, decimals = "8"}) {
+		try {
+			let app = this;
+			let {thorchainAmm} = app;
+			let {wallet} = app;
+			
+			let runeAsset = AssetRuneNative;
+			let assetAsset = assetFromStringEx(assetPool);
+			decimals = cutil.asNumber(decimals);
+			let rune = new CryptoAmount(assetToBase(xChainUtil.assetAmount(runeAmount)), runeAsset);
+			if (!isAssetRuneNative(rune.asset)) {
+				throw Error("THOR.RUNE  must be the first part in 'assets' duo");
+			}
+			let asset = new CryptoAmount(assetToBase(xChainUtil.assetAmount(assetAmount, decimals)), assetAsset);
+			let addLpParams = {rune, asset};
+			let tx = await tcAmm.addLiquidityPosition(wallet, addLpParams);
+			console.log(tx);
 		} catch (e) {
 			// console.log(e.message);
 			console.log(e);
