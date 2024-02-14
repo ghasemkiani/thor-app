@@ -595,7 +595,8 @@ class App extends cutil.mixin(AppBase, dumper) {
 			let address = addr || app.getAddressFor(asset);
 			try {
 				let lp = await thorchainQuery.checkLiquidityPosition(asset, address);
-				console.log(lp);
+				// console.log(lp.poolShare.assetShare.baseAmount.amount().div(10 ** lp.poolShare.assetShare.baseAmount.decimal).toNumber());
+				// console.log(lp);
 				console.log({
 					address,
 					position: lp.position,
