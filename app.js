@@ -219,12 +219,13 @@ class App extends cutil.mixin(AppBase, dumper) {
 			});
 		app.commander.command("msg")
 			.description("deposit RUNE with custom memo")
+			.option("-t, --asset <asset>", "asset to send (defaults to native THOR.RUNE)")
 			.option("-a, --amount <amount>", "amount to send")
 			.option("-m, --memo <memo>", "transaction memo")
 			.option("-y, --yes", "don't ask for confirmation")
 			.action(async ({amount, memo, yes}) => {
 				app.sub("run", async () => {
-					await app.toMsgDeposit({amount, memo, yes});
+					await app.toMsgDeposit({asset, amount, memo, yes});
 				})
 			});
 		app.commander.command("pools")
@@ -234,7 +235,7 @@ class App extends cutil.mixin(AppBase, dumper) {
 					await app.toShowPools();
 				})
 			});
-		app.commander.command("check")
+		app.commander.command("tx")
 			.description("check tx status")
 			.argument("<hash>", "tx to check")
 			.action(async (hash) => {
@@ -380,11 +381,11 @@ class App extends cutil.mixin(AppBase, dumper) {
 			console.log(e);
 		}
 	}
-	async toMsgDeposit({amount = (1e-8).toFixed(8), memo, yes = false}) {
+	async toMsgDeposit({asset = AssetRuneNative, amount = (1e-8).toFixed(8), memo, yes = false}) {
 		let app = this;
 		try {
-			let runeAsset = AssetRuneNative;
-			let rune = new CryptoAmount(assetToBase(xChainUtil.assetAmount(amount)), runeAsset);
+			asset = cutil.na(asset) ? AssetRuneNative : assetFromString(asset);
+			let rune = new CryptoAmount(assetToBase(xChainUtil.assetAmount(amount)), asset);
 			let {wallet} = app;
 			let client = wallet.clients["THOR"];
 			if (yes || (await Inputter.toConfirm(`Deposit ${rune.formatedAssetString()}?`))) {
