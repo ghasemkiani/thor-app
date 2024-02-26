@@ -223,7 +223,7 @@ class App extends cutil.mixin(AppBase, dumper) {
 			.option("-a, --amount <amount>", "amount to send")
 			.option("-m, --memo <memo>", "transaction memo")
 			.option("-y, --yes", "don't ask for confirmation")
-			.action(async ({amount, memo, yes}) => {
+			.action(async ({asset, amount, memo, yes}) => {
 				app.sub("run", async () => {
 					await app.toMsgDeposit({asset, amount, memo, yes});
 				})
