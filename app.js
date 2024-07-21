@@ -362,6 +362,7 @@ class App extends cutil.mixin(AppBase, dumper) {
 	async toSend({asset, amount, decimals = "8", toAddress, memo}) {
 		let app = this;
 		try {
+			let {network} = app;
 			let {wallet} = app;
 			console.log(`\ Send on ${network} :)\n`);
 			decimals = cutil.asNumber(decimals);
@@ -370,8 +371,9 @@ class App extends cutil.mixin(AppBase, dumper) {
 			let recipient = toAddress;
 			let toChain = asset.synth ? THORChain : asset.chain;
 			let client = wallet.clients[toChain];
-			console.log(`sending ${amount.amount().toFixed()} ${asset.chain} to ${recipient}`);
+			console.log(`sending ${amount.amount().toFixed()} ${asset.ticker} to ${recipient}`);
 			let tx = await client.transfer({
+				asset,
 				recipient,
 				amount: assetToBase(amount),
 				memo,
@@ -381,7 +383,7 @@ class App extends cutil.mixin(AppBase, dumper) {
 			console.log(e);
 		}
 	}
-	async toMsgDeposit({asset = AssetRuneNative, amount = (1e-8).toFixed(8), memo, yes = false}) {
+	async toMsgDeposit({asset, amount = (1e-8).toFixed(8), memo, yes = false}) {
 		let app = this;
 		try {
 			asset = cutil.na(asset) ? AssetRuneNative : assetFromString(asset);
@@ -665,7 +667,7 @@ class App extends cutil.mixin(AppBase, dumper) {
 			}
 			let asset = new CryptoAmount(assetToBase(xChainUtil.assetAmount(assetAmount, decimals)), assetAsset);
 			let addLpParams = {rune, asset};
-			let tx = await tcAmm.addLiquidityPosition(wallet, addLpParams);
+			let tx = await thorchainAmm.addLiquidityPosition(wallet, addLpParams);
 			console.log(tx);
 		} catch (e) {
 			// console.log(e.message);
