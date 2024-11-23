@@ -352,7 +352,6 @@ class App extends cutil.mixin(AppBase, dumper) {
 		let app = this;
 		try {
 			let {wallet} = app;
-			let {phrase} = app;
 			let addresses = Object.entries(await wallet.clients).map(([chain, client]) => ({chain, address: client.getAddress()}));
 			console.log(addresses.map(({chain, address}) => [chain.padEnd(8), address.padStart(48)].join("\t")).join("\n"));
 		} catch(e) {
