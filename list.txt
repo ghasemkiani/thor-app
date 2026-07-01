@@ -1,0 +1,35 @@
+github:ghasemkiani/base github:ghasemkiani/base-app github:ghasemkiani/fetch github:ghasemkiani/io gitlab:ghasemkiani/pass
+
+@xchainjs/xchain-client
+@xchainjs/xchain-util
+
+
+
+@xchainjs/xchain-bitcoin
+@xchainjs/xchain-bitcoincash
+@xchainjs/xchain-cosmos
+@xchainjs/xchain-cosmos-sdk
+@xchainjs/xchain-crypto
+
+@xchainjs/xchain-dash
+@xchainjs/xchain-doge
+
+@xchainjs/xchain-evm @xchainjs/xchain-evm-providers
+@xchainjs/xchain-kujira
+@xchainjs/xchain-litecoin
+@xchainjs/xchain-mayachain
+@xchainjs/xchain-midgard
+@xchainjs/xchain-midgard-query
+@xchainjs/xchain-thorchain
+@xchainjs/xchain-thorchain-amm
+@xchainjs/xchain-thorchain-query
+@xchainjs/xchain-thornode
+@xchainjs/xchain-utxo
+@xchainjs/xchain-utxo-providers
+
+
+@psf/bitcoincashjs-lib
+@xchainjs/xchain-binance
+@cosmos-client/core
+@binance-chain/javascript-sdk
+axios axios-retry bchaddrjs bech32-buffer bignumber.js coininfo coinselect cosmos-client dateformat ethers
